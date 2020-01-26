@@ -6,20 +6,30 @@ provider "aws" {
   region = "ap-southeast-2"
 }
 
+data "terraform_remote_state" "infra" {
+  backend = "s3"
+  config = {
+    bucket = "terraform-state-397977497739"
+    key    = "dev/infra/terraform.tfstate"
+    region = "ap-southeast-2"
+  }
+}
+
 locals {
-  prefix = "${var.environment}-${var.appname}"
+  prefixed_appname = "${var.environment}-${var.appname}"
+  cluster_name     = var.cluster_name == "" ? data.terraform_remote_state.infra.outputs.applications_cluster_name : var.cluster_name
 }
 
 data "aws_caller_identity" "current" {}
 
 # create artifacts bucket
 resource "aws_s3_bucket" "build_artifacts" {
-  bucket        = "${local.prefix}-build-artifacts-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${local.prefixed_appname}-build-artifacts-${data.aws_caller_identity.current.account_id}"
   acl           = "private"
   force_destroy = false
 
   tags = {
-    Name        = "${local.prefix}-build-artifacts"
+    Name        = "${local.prefixed_appname}-build-artifacts"
     Environment = "${var.environment}"
   }
 }
@@ -47,13 +57,13 @@ data "aws_iam_policy_document" "build_artifacts_policy" {
 # create artifacts bucket access policy
 resource "aws_iam_policy" "build_artifacts_policy" {
   depends_on = [aws_s3_bucket.build_artifacts]
-  name       = "${local.prefix}-build-artifacts-policy"
+  name       = "${local.prefixed_appname}-build-artifacts-policy"
   policy     = data.aws_iam_policy_document.build_artifacts_policy.json
 }
 
 # create ecr repo
 resource "aws_ecr_repository" "images_repo" {
-  name = "${local.prefix}"
+  name = "${local.prefixed_appname}"
 }
 
 # create codebuild
@@ -99,7 +109,7 @@ data "aws_iam_policy_document" "codepipeline_assume_role" {
 
 # create codepipeline role
 resource "aws_iam_role" "codepipeline" {
-  name               = "${local.prefix}-codepipeline"
+  name               = "${local.prefixed_appname}-codepipeline"
   assume_role_policy = data.aws_iam_policy_document.codepipeline_assume_role.json
 }
 
@@ -109,7 +119,7 @@ data "aws_ssm_parameter" "github_token" {
 }
 
 resource "aws_codepipeline" "codepipeline" {
-  name     = "${local.prefix}-codepipeline"
+  name     = "${local.prefixed_appname}-codepipeline"
   role_arn = aws_iam_role.codepipeline.arn
 
   artifact_store {
@@ -149,10 +159,28 @@ resource "aws_codepipeline" "codepipeline" {
       version  = "1"
 
       input_artifacts  = ["code"]
-      output_artifacts = ["package"]
+      output_artifacts = ["build_output"]
 
       configuration = {
         ProjectName = module.codebuild.project_name
+      }
+    }
+  }
+
+  stage {
+    name = "Deploy"
+
+    action {
+      name            = "Deploy"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = "ECS"
+      input_artifacts = ["build_output"]
+      version         = "1"
+
+      configuration = {
+        ClusterName = local.cluster_name
+        ServiceName = local.prefixed_appname
       }
     }
   }
@@ -184,7 +212,7 @@ data "aws_iam_policy_document" "codepipeline" {
 }
 
 resource "aws_iam_policy" "codepipeline_policy" {
-  name   = "${local.prefix}-codepipeline-policy"
+  name   = "${local.prefixed_appname}-codepipeline-policy"
   policy = data.aws_iam_policy_document.codepipeline.json
 }
 
@@ -212,7 +240,7 @@ data "aws_iam_policy_document" "codebuild_access_policy" {
 }
 
 resource "aws_iam_policy" "codebuild_access_policy" {
-  name   = "${local.prefix}-codebuild-access-policy"
+  name   = "${local.prefixed_appname}-codebuild-access-policy"
   policy = data.aws_iam_policy_document.codebuild_access_policy.json
 }
 

@@ -1,3 +1,4 @@
+
 variable "appname" {
   type = string
 }
@@ -13,4 +14,9 @@ variable "repo" {
 variable "branch" {
   type    = string
   default = "develop"
+}
+
+variable "cluster_name" {
+  type    = string
+  default = ""
 }
