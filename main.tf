@@ -66,6 +66,29 @@ resource "aws_ecr_repository" "images_repo" {
   name = "${local.prefixed_appname}"
 }
 
+resource "aws_ecr_lifecycle_policy" "images_repo_policy" {
+  repository = "${aws_ecr_repository.images_repo.name}"
+
+  policy = <<EOF
+{
+    "rules": [
+        {
+            "rulePriority": 1,
+            "description": "Keep last 5 images",
+            "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 5
+            },
+            "action": {
+                "type": "expire"
+            }
+        }
+    ]
+}
+EOF
+}
+
 # create codebuild
 module "codebuild" {
   source             = "git::https://github.com/cloudposse/terraform-aws-codebuild.git?ref=tags/0.17.0"
