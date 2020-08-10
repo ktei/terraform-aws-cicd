@@ -18,6 +18,7 @@ data "terraform_remote_state" "infra" {
 locals {
   prefixed_appname = "${var.environment}-${var.appname}"
   cluster_name     = var.cluster_name == "" ? data.terraform_remote_state.infra.outputs.applications_cluster_name : var.cluster_name
+  has_deploy_stage = contains(var.stages, "deploy")
 }
 
 data "aws_caller_identity" "current" {}
@@ -95,16 +96,16 @@ module "codebuild" {
   namespace          = var.appname
   name               = "codebuild"
   stage              = var.environment
-  build_image        = "aws/codebuild/standard:2.0"
+  build_image        = "aws/codebuild/standard:4.0"
   build_compute_type = "BUILD_GENERAL1_LARGE"
   image_repo_name    = aws_ecr_repository.images_repo.name
   privileged_mode    = true
-  environment_variables = [
+  environment_variables = concat([
     {
       name  = "ENV",
       value = var.environment
     }
-  ]
+  ], var.codebuild_env_vars)
 }
 
 # attach artifacts bucket access policy to codebuild
@@ -190,20 +191,23 @@ resource "aws_codepipeline" "codepipeline" {
     }
   }
 
-  stage {
-    name = "Deploy"
+  dynamic "stage" {
+    for_each = local.has_deploy_stage? ["deploy"]: []
+    content {
+      name = "Deploy"
 
-    action {
-      name            = "Deploy"
-      category        = "Deploy"
-      owner           = "AWS"
-      provider        = "ECS"
-      input_artifacts = ["build_output"]
-      version         = "1"
+      action {
+        name            = "Deploy"
+        category        = "Deploy"
+        owner           = "AWS"
+        provider        = "ECS"
+        input_artifacts = ["build_output"]
+        version         = "1"
 
-      configuration = {
-        ClusterName = local.cluster_name
-        ServiceName = local.prefixed_appname
+        configuration = {
+          ClusterName = local.cluster_name
+          ServiceName = local.prefixed_appname
+        }
       }
     }
   }
@@ -260,6 +264,15 @@ data "aws_iam_policy_document" "codebuild_access_policy" {
     resources = [module.codebuild.project_id]
     effect    = "Allow"
   }
+
+  dynamic "statement" {
+    for_each = var.codebuild_permissions
+    content {
+      actions   = statement.value.actions
+      resources = statement.value.resources
+      effect    = "Allow"
+    }
+  }
 }
 
 resource "aws_iam_policy" "codebuild_access_policy" {
@@ -271,3 +284,28 @@ resource "aws_iam_role_policy_attachment" "codepipeline_codebuild_access" {
   role       = aws_iam_role.codepipeline.id
   policy_arn = aws_iam_policy.codebuild_access_policy.arn
 }
+
+data "aws_iam_policy_document" "codebuild_permissions_policy" {
+  count      = length(var.codebuild_permissions) > 0 ? 1 : 0
+  dynamic "statement" {
+    for_each = var.codebuild_permissions
+    content {
+      actions   = statement.value.actions
+      resources = statement.value.resources
+      effect    = "Allow"
+    }
+  }
+}
+
+resource "aws_iam_policy" "codebuild_permissions_policy" {
+  count  = length(var.codebuild_permissions) > 0 ? 1 : 0
+  name   = "${local.prefixed_appname}-codebuild-permissions-policy"
+  policy = data.aws_iam_policy_document.codebuild_permissions_policy[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "codebuild_permissions" {
+  count      = length(var.codebuild_permissions) > 0 ? 1 : 0
+  role       = module.codebuild.role_id
+  policy_arn = aws_iam_policy.codebuild_permissions_policy[0].arn
+}
+
