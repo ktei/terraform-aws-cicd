@@ -30,6 +30,7 @@ variable "codebuild_env_vars" {
   type = list(object(
     {
       name  = string
+      type  = string
       value = string
   }))
   default = []

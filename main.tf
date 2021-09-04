@@ -92,7 +92,7 @@ EOF
 
 # create codebuild
 module "codebuild" {
-  source             = "git::https://github.com/cloudposse/terraform-aws-codebuild.git?ref=tags/0.17.0"
+  source             = "git::https://github.com/cloudposse/terraform-aws-codebuild.git?ref=tags/0.37.1"
   namespace          = var.appname
   name               = "codebuild"
   stage              = var.environment
@@ -102,10 +102,13 @@ module "codebuild" {
   privileged_mode    = true
   environment_variables = concat([
     {
-      name  = "ENV",
+      name  = "ENV"
+      type  = "PLAINTEXT"
       value = var.environment
     }
   ], var.codebuild_env_vars)
+  cache_type = "LOCAL"
+  local_cache_modes = ["LOCAL_DOCKER_LAYER_CACHE"]
 }
 
 # attach artifacts bucket access policy to codebuild
