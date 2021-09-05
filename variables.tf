@@ -22,7 +22,7 @@ variable "cluster_name" {
 }
 
 variable "stages" {
-  type = list(string)
+  type    = list(string)
   default = ["source", "build", "deploy"]
 }
 
