@@ -309,3 +309,6 @@ resource "aws_iam_role_policy_attachment" "codebuild_permissions" {
   policy_arn = aws_iam_policy.codebuild_permissions_policy[0].arn
 }
 
+output "codepipeline_role_id" {
+  value       = aws_iam_role.codepipeline.id
+}
