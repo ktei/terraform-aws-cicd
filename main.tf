@@ -195,7 +195,7 @@ resource "aws_codepipeline" "codepipeline" {
   }
 
   dynamic "stage" {
-    for_each = local.has_deploy_stage? ["deploy"]: []
+    for_each = local.has_deploy_stage ? ["deploy"] : []
     content {
       name = "Deploy"
 
@@ -289,7 +289,7 @@ resource "aws_iam_role_policy_attachment" "codepipeline_codebuild_access" {
 }
 
 data "aws_iam_policy_document" "codebuild_permissions_policy" {
-  count      = length(var.codebuild_permissions) > 0 ? 1 : 0
+  count = length(var.codebuild_permissions) > 0 ? 1 : 0
   dynamic "statement" {
     for_each = var.codebuild_permissions
     content {
@@ -312,3 +312,6 @@ resource "aws_iam_role_policy_attachment" "codebuild_permissions" {
   policy_arn = aws_iam_policy.codebuild_permissions_policy[0].arn
 }
 
+output "codebuild_role_id" {
+  value = module.codebuild.role_id
+}
