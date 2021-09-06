@@ -107,7 +107,7 @@ module "codebuild" {
       value = var.environment
     }
   ], var.codebuild_env_vars)
-  cache_type = "LOCAL"
+  cache_type        = "LOCAL"
   local_cache_modes = ["LOCAL_DOCKER_LAYER_CACHE"]
 }
 
