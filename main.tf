@@ -311,3 +311,7 @@ resource "aws_iam_role_policy_attachment" "codebuild_permissions" {
   role       = module.codebuild.role_id
   policy_arn = aws_iam_policy.codebuild_permissions_policy[0].arn
 }
+
+output "codebuild_role_id" {
+  value = module.codebuild.role_id
+}
